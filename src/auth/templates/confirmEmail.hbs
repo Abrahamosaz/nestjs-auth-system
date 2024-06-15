@@ -1,0 +1,40 @@
+<html lang='en'>
+  <head>
+    <meta charset='UTF-8' />
+    <meta name='viewport' content='width=device-width, initial-scale=1.0' />
+    <title>Registration Confirmation</title>
+    <style>
+      body { font-family: Arial, sans-serif; background-color: #f4f4f4; margin:
+      0; padding: 0; } .container { max-width: 600px; margin: 0 auto; padding:
+      20px; background-color: #ffffff; border: 1px solid #dddddd; } .header {
+      text-align: center; padding: 20px; background-color: #4CAF50; color:
+      #ffffff; } .content { padding: 20px; text-align: left; } .button {
+      display: inline-block; margin-top: 20px; padding: 10px 20px; font-size:
+      16px; color: #ffffff; background-color: #4CAF50; text-decoration: none;
+      border-radius: 5px; } .footer { text-align: center; padding: 20px;
+      font-size: 12px; color: #888888; }
+    </style>
+  </head>
+  <body>
+    <div class='container'>
+      <div class='header'>
+        <h1>Welcome, {{firstName}}!</h1>
+      </div>
+      <div class='content'>
+        <p>Dear {{firstName}},</p>
+        <p>Thank you for registering with
+          {{companyName}}. We are excited to have you on board.</p>
+        <p>To complete your registration, please click the button below to
+          verify your email address:</p>
+        <form action='{{EmailLink}}' method='POST'>
+          <button type='submit' class='button'>Verify Email</button>
+        </form>
+        <p>If you did not create an account, please disregard this email.</p>
+        <p>Best regards,<br />The {{companyName}} Team</p>
+      </div>
+      <div class='footer'>
+        <p>&copy; {{year}} {{companyName}}. All rights reserved.</p>
+      </div>
+    </div>
+  </body>
+</html>
