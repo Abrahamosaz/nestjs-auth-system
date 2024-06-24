@@ -13,6 +13,18 @@ export class UserEntity {
   @Exclude()
   confirmPassword: string;
 
+  @Exclude()
+  isFacebook: boolean;
+
+  @Exclude()
+  isGoogle: boolean;
+
+  @Exclude()
+  role: 'USER' | 'ADMIN';
+
+  @Exclude()
+  isLogin: boolean;
+
   constructor(partial: Partial<UserEntity>) {
     Object.assign(this, partial);
   }

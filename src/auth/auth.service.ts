@@ -1,4 +1,10 @@
-import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  HttpException,
+  HttpStatus,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { CreateUserDto } from 'src/auth/dtos/create.dto';
 import { LoginUserDto } from 'src/auth/dtos/login.dto';
 import { JwtService } from '@nestjs/jwt';
@@ -60,10 +66,15 @@ export class AuthService {
       );
     }
 
+    if (user.isLogin) {
+      throw new BadRequestException('user already login');
+    }
+
     const password = loginUserDto.password;
     const isMatch = await this.verifyPasswordHash(user.password, password);
 
     if (isMatch) {
+      await this.updateUserByEmail(user?.email, { isLogin: true });
       return await this.generateAndStoreTokens(user.id);
     }
 
@@ -71,18 +82,18 @@ export class AuthService {
   }
 
   async getNewAccessToken(userId: number, refreshToken: string) {
-    const token = await this.prisma.refreshToken.findUnique({
+    const refreshtoken = await this.prisma.refreshToken.findUnique({
       where: {
         userId,
         token: refreshToken,
       },
     });
 
-    if (!token) {
+    if (!refreshtoken) {
       throw new HttpException('Invalid refresh token', HttpStatus.FORBIDDEN);
     }
 
-    if (token.blackListed) {
+    if (refreshtoken.blackListed) {
       throw new HttpException(
         'Refresh Token has been blacklisted',
         HttpStatus.FORBIDDEN,
@@ -92,15 +103,7 @@ export class AuthService {
     const newTokens = await this.generateTokens(userId);
 
     if (newTokens) {
-      token.blackListed = true;
-
-      await this.prisma.refreshToken.update({
-        where: {
-          token: token.token,
-          userId: token.userId,
-        },
-        data: token,
-      });
+      await this.blackListRefresToken(refreshtoken.token, refreshtoken.userId);
 
       try {
         await this.storeRefreshToken(newTokens.refreshToken, userId);
@@ -213,6 +216,26 @@ export class AuthService {
     return 'Password reset successful';
   }
 
+  async getCurrentUser(accessToken: string) {
+    const user = this.verifyJwtToken(accessToken);
+
+    if (!user) {
+      throw new NotFoundException('user with this email not found');
+    }
+
+    return user;
+  }
+
+  async logout(tokens: { accessToken: string; refreshToken: string }) {
+    try {
+      const user = await this.verifyJwtToken(tokens.accessToken);
+      await this.updateUserByEmail(user?.email, { isLogin: false });
+      await this.blackListRefresToken(tokens.refreshToken, user.id);
+      return 'logout successful';
+    } catch (err) {
+      return 'user already logout';
+    }
+  }
   async generateTokens(userId: number) {
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(
@@ -287,6 +310,26 @@ export class AuthService {
     });
   }
 
+  async blackListRefresToken(token: string, userId: number) {
+    await this.prisma.refreshToken.update({
+      where: {
+        token,
+        userId,
+      },
+      data: {
+        blackListed: true,
+      },
+    });
+  }
+
+  async updateUserByEmail(email: string, data: any) {
+    await this.prisma.user.update({
+      where: {
+        email,
+      },
+      data,
+    });
+  }
   async sendTemplateEmail(
     user: any,
     template: string,
@@ -360,5 +403,17 @@ export class AuthService {
       );
     }
     return { userId, accessToken, refreshToken };
+  }
+
+  async verifyJwtToken(jwtAccessToken: string) {
+    try {
+      const payload = await this.jwtService.verifyAsync(jwtAccessToken, {
+        secret: this.configService.get<string>('jwt.access_secret'),
+      });
+
+      return await this.findUserbyId(payload.sub);
+    } catch (err) {
+      throw err;
+    }
   }
 }

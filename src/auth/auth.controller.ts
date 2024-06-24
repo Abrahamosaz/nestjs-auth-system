@@ -3,7 +3,6 @@ import {
   ClassSerializerInterceptor,
   Controller,
   Get,
-  HttpException,
   HttpStatus,
   Param,
   Post,
@@ -11,9 +10,7 @@ import {
   Res,
   UseGuards,
   UseInterceptors,
-  ValidationPipe,
 } from '@nestjs/common';
-import { AuthService } from './auth.service';
 import { CheckPasswords } from './pipes/checkPassword.pipe';
 import { CreateUserDto } from 'src/auth/dtos/create.dto';
 import { LoginUserDto } from 'src/auth/dtos/login.dto';
@@ -24,6 +21,8 @@ import { ResendEmailDto } from './dtos/resendEmail.dto';
 import { ResetPasswordDto } from './dtos/resetPassword.dto';
 import { AuthGuard } from '@nestjs/passport';
 import { LoginAuthGuard } from './guards/AuthGuard';
+import { ApiKeyGuard } from './guards/apiKeyGuard';
+import { AuthService } from './auth.service';
 
 @Controller('auth')
 export class AuthController {
@@ -47,17 +46,27 @@ export class AuthController {
     return await this.authService.generateAndStoreTokens(user.id);
   }
 
-  @Get('/facebook')
+  @Get('facebook')
   @UseGuards(AuthGuard('facebook'))
   async facebookLogin(): Promise<any> {
     return HttpStatus.OK;
   }
 
-  @Get('/facebook/redirect')
+  @Get('facebook/redirect')
   @UseGuards(AuthGuard('facebook'))
   async facebookLoginRedirect(@Req() req: Request): Promise<any> {
     const user: any = req.user;
     return await this.authService.generateAndStoreTokens(user.id);
+  }
+
+  @Get('current_user')
+  @UseInterceptors(ClassSerializerInterceptor)
+  @UseGuards(ApiKeyGuard)
+  async getCurrentUser(@Req() req: Request) {
+    const accessToken = req.cookies.accessToken ?? req.body.accessToken;
+    const user = await this.authService.getCurrentUser(accessToken);
+
+    return new UserEntity(user);
   }
 
   @Post('signup')
@@ -78,7 +87,21 @@ export class AuthController {
   ) {
     const loginData = await this.authService.login(loginUserDto);
     res.cookie('accessToken', loginData.accessToken);
+    res.cookie('refreshToken', loginData.refreshToken);
     return loginData;
+  }
+
+  @Post('logout')
+  async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    const accessToken = req.cookies.accessToken ?? req.body.accessToken;
+    const refreshToken = req.cookies.refreshToken ?? req.body.refreshToken;
+    const resMessage = await this.authService.logout({
+      accessToken,
+      refreshToken,
+    });
+    res.clearCookie('accessToken');
+    res.clearCookie('refreshToken');
+    return resMessage;
   }
 
   @Post('email/resend')

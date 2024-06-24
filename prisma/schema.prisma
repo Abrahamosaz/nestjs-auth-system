@@ -27,6 +27,7 @@ model User {
   updatedAt     DateTime?  @updatedAt
   isGoogle      Boolean    @default(false)
   isFacebook    Boolean    @default(false)
+  isLogin       Boolean    @default(false)
 
   @@map("users")
 }
