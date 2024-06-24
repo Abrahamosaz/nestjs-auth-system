@@ -17,16 +17,14 @@ import { LoginUserDto } from 'src/auth/dtos/login.dto';
 import { RefreshTokenDto } from './dtos/refresh.dto';
 import { Request, Response } from 'express';
 import { UserEntity } from './serializers/user.serializer';
-import { ResendEmailDto } from './dtos/resendEmail.dto';
 import { ResetPasswordDto } from './dtos/resetPassword.dto';
 import { AuthGuard } from '@nestjs/passport';
 import { LoginAuthGuard } from './guards/AuthGuard';
-import { ApiKeyGuard } from './guards/apiKeyGuard';
 import { AuthService } from './auth.service';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private authService: AuthService) {}
+  constructor(private readonly authService: AuthService) {}
 
   @Get('google')
   @UseGuards(AuthGuard('google'))
@@ -57,16 +55,6 @@ export class AuthController {
   async facebookLoginRedirect(@Req() req: Request): Promise<any> {
     const user: any = req.user;
     return await this.authService.generateAndStoreTokens(user.id);
-  }
-
-  @Get('current_user')
-  @UseInterceptors(ClassSerializerInterceptor)
-  @UseGuards(ApiKeyGuard)
-  async getCurrentUser(@Req() req: Request) {
-    const accessToken = req.cookies.accessToken ?? req.body.accessToken;
-    const user = await this.authService.getCurrentUser(accessToken);
-
-    return new UserEntity(user);
   }
 
   @Post('signup')
@@ -104,29 +92,9 @@ export class AuthController {
     return resMessage;
   }
 
-  @Post('email/resend')
-  async resendConfirmLink(
-    @Body() resendEmailDto: ResendEmailDto,
-    @Res() res: Response,
-  ) {
-    const message = await this.authService.resendConfirmEmail(
-      resendEmailDto.email,
-    );
-    res.status(201).json({ message });
-  }
-
   @Post('confirm/:token')
   async confirmEmail(@Param('token') token: string, @Res() res: Response) {
     const message = await this.authService.ConfirmEmail(token);
-    res.status(201).json({ message });
-  }
-
-  @Post('email/reset')
-  async sendResetLink(
-    @Body() resendEmailDto: ResendEmailDto,
-    @Res() res: Response,
-  ) {
-    const message = await this.authService.sendResetLink(resendEmailDto.email);
     res.status(201).json({ message });
   }
 
@@ -135,7 +103,7 @@ export class AuthController {
     @Body(new CheckPasswords()) resetPasswordDto: ResetPasswordDto,
     @Res() res: Response,
   ) {
-    const message = await this.authService.ResetEmail(resetPasswordDto);
+    const message = await this.authService.ResetPassword(resetPasswordDto);
     res.status(201).json({ message });
   }
 

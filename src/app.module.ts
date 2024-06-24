@@ -6,10 +6,15 @@ import { AppController } from './app.controller';
 import configuration from './config/configuration';
 import { JwtModule } from '@nestjs/jwt';
 import { jwtConstants } from './auth/constants';
+import { UserModule } from './user/user.module';
+import { EmailModule } from './email/email.module';
+import { PrismaService } from './prisma.service';
 
 @Module({
   imports: [
     AuthModule,
+    UserModule,
+    EmailModule,
     ConfigModule.forRoot({
       isGlobal: true,
       load: [configuration],

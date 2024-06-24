@@ -5,17 +5,17 @@ import {
   HttpException,
   HttpStatus,
 } from '@nestjs/common';
-import { AuthService } from '../auth.service';
+import { UserService } from 'src/user/user.service';
 
 @Injectable()
 export class LoginAuthGuard implements CanActivate {
-  constructor(private readonly authService: AuthService) {}
+  constructor(private readonly userService: UserService) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
 
     const email = request.body.email;
-    const user = await this.authService.findUserByEmail(email);
+    const user = await this.userService.findUserByEmail(email);
 
     if (user.isGoogle) {
       throw new HttpException(

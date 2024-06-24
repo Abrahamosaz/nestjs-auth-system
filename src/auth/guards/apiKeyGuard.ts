@@ -4,11 +4,11 @@ import {
   ExecutionContext,
   UnauthorizedException,
 } from '@nestjs/common';
-import { AuthService } from '../auth.service';
+import { UserService } from 'src/user/user.service';
 
 @Injectable()
 export class ApiKeyGuard implements CanActivate {
-  constructor(private readonly authService: AuthService) {}
+  constructor(private readonly userService: UserService) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
@@ -19,7 +19,7 @@ export class ApiKeyGuard implements CanActivate {
 
   async verifyApiKey(api_key: string): Promise<boolean> {
     try {
-      const user = await this.authService.verifyJwtToken(api_key);
+      const user = await this.userService.verifyJwtToken(api_key);
 
       if (!user) {
         throw new UnauthorizedException(

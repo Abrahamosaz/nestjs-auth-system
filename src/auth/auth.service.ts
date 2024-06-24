@@ -13,6 +13,8 @@ import * as bcrypt from 'bcrypt';
 import { PrismaService } from 'src/prisma.service';
 import { MailerService } from '@nestjs-modules/mailer';
 import { ResetPasswordDto } from './dtos/resetPassword.dto';
+import { UserService } from 'src/user/user.service';
+import { EmailService } from 'src/email/email.service';
 
 @Injectable()
 export class AuthService {
@@ -20,11 +22,12 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
     private jwtService: JwtService,
-    private readonly mailerService: MailerService,
+    private readonly emailService: EmailService,
+    private readonly userService: UserService,
   ) {}
 
   async register(createUserDto: CreateUserDto) {
-    const user = await this.findUserByEmail(createUserDto.email);
+    const user = await this.userService.findUserByEmail(createUserDto.email);
 
     if (user) {
       throw new HttpException(
@@ -34,13 +37,15 @@ export class AuthService {
     }
 
     try {
-      const passwordHash = await this.generateHash(createUserDto.password);
+      const passwordHash = await this.userService.generateHash(
+        createUserDto.password,
+      );
       const user = await this.prisma.user.create({
         data: { ...createUserDto, password: passwordHash },
       });
 
       // send the confirmation email
-      await this.sendTemplateEmail(
+      await this.emailService.sendTemplateEmail(
         user,
         'confirmEmail.hbs',
         'registration Email',
@@ -57,7 +62,7 @@ export class AuthService {
   }
 
   async login(loginUserDto: LoginUserDto) {
-    const user = await this.findUserByEmail(loginUserDto.email);
+    const user = await this.userService.findUserByEmail(loginUserDto.email);
 
     if (!user) {
       throw new HttpException(
@@ -71,10 +76,13 @@ export class AuthService {
     }
 
     const password = loginUserDto.password;
-    const isMatch = await this.verifyPasswordHash(user.password, password);
+    const isMatch = await this.userService.verifyPasswordHash(
+      user.password,
+      password,
+    );
 
     if (isMatch) {
-      await this.updateUserByEmail(user?.email, { isLogin: true });
+      await this.userService.updateUserByEmail(user?.email, { isLogin: true });
       return await this.generateAndStoreTokens(user.id);
     }
 
@@ -118,45 +126,6 @@ export class AuthService {
     return newTokens;
   }
 
-  async resendConfirmEmail(email: string) {
-    const user = await this.findUserByEmail(email);
-
-    if (!user) {
-      if (user) {
-        throw new HttpException('Email does not exist', HttpStatus.NOT_FOUND);
-      }
-    }
-
-    // send the confirmation email
-    await this.sendTemplateEmail(
-      user,
-      'confirmEmail.hbs',
-      'Welcome to nestAuth - Confirm Your Email',
-      'confirm',
-    );
-
-    return 'Confirmation email link sent successful';
-  }
-
-  async sendResetLink(email: string) {
-    const user = await this.findUserByEmail(email);
-
-    if (!user) {
-      if (user) {
-        throw new HttpException('Email does not exist', HttpStatus.NOT_FOUND);
-      }
-    }
-
-    await this.sendTemplateEmail(
-      user,
-      'resetPasswordEmail.hbs',
-      'Password Reset Instructions',
-      'reset',
-    );
-
-    return 'Reset password email link sent successful';
-  }
-
   async ConfirmEmail(token: string) {
     let payload: { sub: number };
 
@@ -168,7 +137,7 @@ export class AuthService {
       throw new HttpException('Invalid token', HttpStatus.FORBIDDEN);
     }
 
-    const user: any = await this.findUserbyId(payload.sub);
+    const user: any = await this.userService.findUserbyId(payload.sub);
 
     if (!user) {
       throw new HttpException('Email does not exist', HttpStatus.FORBIDDEN);
@@ -180,17 +149,11 @@ export class AuthService {
 
     user.confirmEmail = true;
 
-    await this.prisma.user.update({
-      where: {
-        id: payload.sub,
-      },
-      data: user,
-    });
-
+    await this.userService.updateUserByEmail(user.email, user);
     return 'Email confirm successful';
   }
 
-  async ResetEmail(resetPasswordDto: ResetPasswordDto) {
+  async ResetPassword(resetPasswordDto: ResetPasswordDto) {
     let payload: { sub: number };
 
     try {
@@ -201,35 +164,20 @@ export class AuthService {
       throw new HttpException('Invalid token', HttpStatus.FORBIDDEN);
     }
 
-    const user = await this.findUserbyId(payload.sub);
-    const password = await this.generateHash(resetPasswordDto.password);
+    const user = await this.userService.findUserbyId(payload.sub);
+    const password = await this.userService.generateHash(
+      resetPasswordDto.password,
+    );
     user.password = password;
 
-    await this.prisma.user.update({
-      where: {
-        id: user.id,
-        email: user.email,
-      },
-      data: user,
-    });
-
+    await this.userService.updateUserByEmail(user.email, user);
     return 'Password reset successful';
-  }
-
-  async getCurrentUser(accessToken: string) {
-    const user = this.verifyJwtToken(accessToken);
-
-    if (!user) {
-      throw new NotFoundException('user with this email not found');
-    }
-
-    return user;
   }
 
   async logout(tokens: { accessToken: string; refreshToken: string }) {
     try {
-      const user = await this.verifyJwtToken(tokens.accessToken);
-      await this.updateUserByEmail(user?.email, { isLogin: false });
+      const user = await this.userService.verifyJwtToken(tokens.accessToken);
+      await this.userService.updateUserByEmail(user?.email, { isLogin: false });
       await this.blackListRefresToken(tokens.refreshToken, user.id);
       return 'logout successful';
     } catch (err) {
@@ -264,17 +212,6 @@ export class AuthService {
     };
   }
 
-  async generateHash(password: string) {
-    const salt = await bcrypt.genSalt();
-    const hash = await bcrypt.hash(password, salt);
-
-    return hash;
-  }
-
-  async verifyPasswordHash(hash: string, password: string) {
-    return await bcrypt.compare(password, hash);
-  }
-
   async storeRefreshToken(token: string, userId: number) {
     // Create a new date object for the future date
     const expiryDate: Date = new Date();
@@ -282,31 +219,6 @@ export class AuthService {
 
     await this.prisma.refreshToken.create({
       data: { token, userId, expiryDate },
-    });
-  }
-
-  async sendEmail(options: EmailOptions) {
-    try {
-      await this.mailerService.sendMail({
-        to: options.to,
-        subject: options.subject,
-        template: options.template,
-        context: options.context || {},
-      });
-    } catch (err) {
-      console.log('error sending mail', err);
-    }
-  }
-
-  async findUserByEmail(email: string) {
-    return await this.prisma.user.findUnique({
-      where: { email },
-    });
-  }
-
-  async findUserbyId(id: number) {
-    return await this.prisma.user.findUnique({
-      where: { id },
     });
   }
 
@@ -322,45 +234,8 @@ export class AuthService {
     });
   }
 
-  async updateUserByEmail(email: string, data: any) {
-    await this.prisma.user.update({
-      where: {
-        email,
-      },
-      data,
-    });
-  }
-  async sendTemplateEmail(
-    user: any,
-    template: string,
-    subject: string,
-    subpath: string,
-  ) {
-    const activationToken = await this.jwtService.signAsync(
-      { sub: user.id },
-      {
-        secret: this.configService.get('jwt.secret'),
-        expiresIn: '1h',
-      },
-    );
-
-    const EmailLink = `${this.configService.get<string>('templateUrl')}/api/auth/${subpath}/${activationToken}`;
-    const year = new Date();
-    await this.sendEmail({
-      template,
-      subject,
-      to: user.email,
-      context: {
-        EmailLink,
-        firstName: user.firstName,
-        companyName: 'NestauthCompany',
-        year: year.getFullYear(),
-      },
-    });
-  }
-
   async validateOuthUser(userDetails: any, type: 'google' | 'facebook') {
-    const user = await this.findUserByEmail(userDetails.email);
+    const user = await this.userService.findUserByEmail(userDetails.email);
 
     if (user) {
       if (type === 'google' && !user.isGoogle) {
@@ -403,17 +278,5 @@ export class AuthService {
       );
     }
     return { userId, accessToken, refreshToken };
-  }
-
-  async verifyJwtToken(jwtAccessToken: string) {
-    try {
-      const payload = await this.jwtService.verifyAsync(jwtAccessToken, {
-        secret: this.configService.get<string>('jwt.access_secret'),
-      });
-
-      return await this.findUserbyId(payload.sub);
-    } catch (err) {
-      throw err;
-    }
   }
 }
