@@ -3,18 +3,14 @@ import {
   HttpException,
   HttpStatus,
   Injectable,
-  NotFoundException,
 } from '@nestjs/common';
 import { CreateUserDto } from 'src/auth/dtos/create.dto';
 import { LoginUserDto } from 'src/auth/dtos/login.dto';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import * as bcrypt from 'bcrypt';
 import { PrismaService } from 'src/prisma.service';
-import { MailerService } from '@nestjs-modules/mailer';
 import { ResetPasswordDto } from './dtos/resetPassword.dto';
 import { UserService } from 'src/user/user.service';
-import { EmailService } from 'src/email/email.service';
 
 @Injectable()
 export class AuthService {
@@ -22,7 +18,6 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
     private jwtService: JwtService,
-    private readonly emailService: EmailService,
     private readonly userService: UserService,
   ) {}
 
@@ -43,17 +38,8 @@ export class AuthService {
       const user = await this.prisma.user.create({
         data: { ...createUserDto, password: passwordHash },
       });
-
-      // send the confirmation email
-      await this.emailService.sendTemplateEmail(
-        user,
-        'confirmEmail.hbs',
-        'registration Email',
-        'confirm',
-      );
       return user;
     } catch (err) {
-      console.log('error', err);
       throw new HttpException(
         'Error occurred creating user due to invalid credentials',
         HttpStatus.BAD_REQUEST,

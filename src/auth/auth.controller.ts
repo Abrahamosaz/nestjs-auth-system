@@ -21,10 +21,14 @@ import { ResetPasswordDto } from './dtos/resetPassword.dto';
 import { AuthGuard } from '@nestjs/passport';
 import { LoginAuthGuard } from './guards/AuthGuard';
 import { AuthService } from './auth.service';
+import { EmailService } from 'src/email/email.service';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly emailService: EmailService,
+  ) {}
 
   @Get('google')
   @UseGuards(AuthGuard('google'))
@@ -64,6 +68,14 @@ export class AuthController {
     createUserDto: CreateUserDto,
   ) {
     const user = await this.authService.register(createUserDto);
+    // send the confirmation email
+    await this.emailService.sendTemplateEmail(
+      user,
+      'confirmEmail.hbs',
+      'registration Email',
+      'confirm',
+    );
+
     return new UserEntity(user);
   }
 

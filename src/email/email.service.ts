@@ -1,5 +1,5 @@
 import { MailerService } from '@nestjs-modules/mailer';
-import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { ResetPasswordDto } from 'src/auth/dtos/resetPassword.dto';
@@ -13,6 +13,8 @@ export class EmailService {
     private readonly mailerService: MailerService,
     private readonly userService: UserService,
   ) {}
+
+  private readonly logger = new Logger(EmailService.name);
 
   async resendConfirmEmail(email: string) {
     const user = await this.userService.findUserByEmail(email);
@@ -93,7 +95,7 @@ export class EmailService {
         context: options.context || {},
       });
     } catch (err) {
-      console.log('error sending mail', err);
+      this.logger.error('error sending mail', err);
     }
   }
 
