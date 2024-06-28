@@ -3,6 +3,7 @@ import {
   ClassSerializerInterceptor,
   Controller,
   Get,
+  HttpException,
   HttpStatus,
   Param,
   Post,
@@ -33,19 +34,32 @@ export class AuthController {
   @Get('google')
   @UseGuards(AuthGuard('google'))
   async googleAuth(@Req() req: Request) {
-    // This route initiates the Google OAuth2 login flow.
-    // The user is redirected to Google for authentication.
     return HttpStatus.OK;
   }
 
   @Get('google/callback')
   @UseGuards(AuthGuard('google'))
-  async googleAuthRedirect(@Req() req: Request) {
-    // This route handles the Google OAuth2 callback.
-    // The user is redirected here after successful authentication.
-    // 'req.user' will contain the authenticated user's information.
-    const user: any = req.user;
-    return await this.authService.generateAndStoreTokens(user.id);
+  async googleAuthRedirect(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    try {
+      const user: any = req.user;
+      const loginData = await this.authService.generateAndStoreTokens(user.id);
+      res.cookie('accessToken', loginData.accessToken);
+      res.cookie('refreshToken', loginData.refreshToken);
+      return loginData;
+    } catch (err) {
+      if (err instanceof HttpException) {
+        throw err;
+      }
+
+      // Handle unexpected errors
+      throw new HttpException(
+        'Internal Server Error',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
   }
 
   @Get('facebook')
@@ -56,9 +70,27 @@ export class AuthController {
 
   @Get('facebook/redirect')
   @UseGuards(AuthGuard('facebook'))
-  async facebookLoginRedirect(@Req() req: Request): Promise<any> {
-    const user: any = req.user;
-    return await this.authService.generateAndStoreTokens(user.id);
+  async facebookLoginRedirect(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<any> {
+    try {
+      const user: any = req.user;
+      const loginData = await this.authService.generateAndStoreTokens(user.id);
+      res.cookie('accessToken', loginData.accessToken);
+      res.cookie('refreshToken', loginData.refreshToken);
+      return loginData;
+    } catch (err) {
+      if (err instanceof HttpException) {
+        throw err;
+      }
+
+      // Handle unexpected errors
+      throw new HttpException(
+        'Internal Server Error',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
   }
 
   @Post('signup')

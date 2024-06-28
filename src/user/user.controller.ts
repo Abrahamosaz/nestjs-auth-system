@@ -15,7 +15,7 @@ import { UserEntity } from 'src/auth/serializers/user.serializer';
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
-  @Get('current_user')
+  @Get('me')
   @UseInterceptors(ClassSerializerInterceptor)
   @UseGuards(ApiKeyGuard)
   async getCurrentUser(@Req() req: Request) {
